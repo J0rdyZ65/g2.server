@@ -18,9 +18,22 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import time
 import sqlite3
+from itertools import count, filterfalse
 
 from flask import current_app, g
+
+class DBException(Exception):
+    pass
+
+class MissingEntry(DBException):
+    pass
+
+class TooManyMatches(DBException):
+    pass
+
+_ENTRY_TIMEOUT = (5*60) # 5mins
 
 
 def get_db():
@@ -30,8 +43,54 @@ def get_db():
     return g.dbc
 
 
-def close_db():
+def close_db(_e=None):
     dbc = g.pop('dbc', None)
 
     if dbc is not None:
         dbc.close()
+
+
+def get_by_client(client_ip, client_hash, client_name, redirect_url):
+    dbc = get_db()
+    client_ip_entries = select(dbc, 'SELECT * FROM OAuth2 WHERE client_ip = ?', client_ip)
+    client_hash_entries = [e for e in client_ip_entries if e['client_hash'] == client_hash]
+    if client_hash_entries:
+        return client_hash_entries[0]
+
+    g2_server_client_id = next(filterfalse(set([r['g2_server_client_id'] for r in client_ip_entries]).__contains__, count(1)))
+    with dbc as dbt:
+        dbt.execute('REPLACE INTO OAuth2 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    client_ip, client_hash, client_name, redirect_url,
+                    g2_server_client_id, '', time.time()+_ENTRY_TIMEOUT)
+    return {
+        'g2_server_client_id': g2_server_client_id,
+    }
+
+
+def get_by_user(client_ip, g2_server_client_id):
+    dbc = get_db()
+    if g2_server_client_id:
+        client_entries = select(dbc, 'SELECT * FROM OAuth2 WHERE client_ip = ? and g2_server_client_id = ?',
+                                client_ip, g2_server_client_id)
+        if not client_entries:
+            raise MissingEntry
+    else:
+        client_entries = select(dbc, 'SELECT * FROM OAuth2 WHERE client_ip = ?', client_ip)
+        if not client_entries:
+            raise MissingEntry
+        if len(client_entries) > 1:
+            raise TooManyMatches
+    return client_entries[0]
+
+
+def select(dbc, sql, *args):
+    dbs = dbc.execute(sql, args)
+    rows = []
+    while True:
+        row = dbs.fetchone()
+        if not row:
+            break
+        if row['expire'] < time.time():
+            rows.append(row)
+
+    return rows
