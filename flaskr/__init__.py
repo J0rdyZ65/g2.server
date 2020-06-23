@@ -41,8 +41,8 @@ def code():
     """Route for the client requesting the authentication on behalf of the user."""
 
     client_ip = request.access_route[0]
-    client_hash = request.form['client_hash']
     client_name = request.form['client_name']
+    client_hash = request.form['client_hash']
     redirect_url = request.form['redirect_url']
 
     row = db.get_by_client(client_ip, client_hash, client_name, redirect_url)
@@ -51,7 +51,7 @@ def code():
         'url': 'https://tinyurl.com/g2auth?c={}]'.format(row['g2_server_client_id']),
         # time in secs that the client has to wait before posting a new request
         'interval': 5,
-        'expire_in': row['expire'] - time.time(),
+        'expire_in': db.ENTRY_TIMEOUT,
     }
     if row['service_code']:
         res['service_code'] = row['service_code']

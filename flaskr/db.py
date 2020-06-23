@@ -33,7 +33,7 @@ class MissingEntry(DBException):
 class TooManyMatches(DBException):
     pass
 
-_ENTRY_TIMEOUT = (5*60) # 5mins
+ENTRY_TIMEOUT = (5*60) # 5mins
 
 
 def get_db():
@@ -61,7 +61,7 @@ def get_by_client(client_ip, client_hash, client_name, redirect_url):
     with dbc as dbt:
         dbt.execute('REPLACE INTO OAuth2 VALUES (?, ?, ?, ?, ?, ?, ?)',
                     client_ip, client_hash, client_name, redirect_url,
-                    g2_server_client_id, '', time.time()+_ENTRY_TIMEOUT)
+                    g2_server_client_id, '', time.time()+ENTRY_TIMEOUT)
     return {
         'g2_server_client_id': g2_server_client_id,
     }
