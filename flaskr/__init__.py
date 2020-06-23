@@ -19,6 +19,7 @@
 """
 
 import os
+import time
 import logging
 from six.moves import urllib
 
@@ -55,6 +56,7 @@ def code():
         'url': 'https://tinyurl.com/g2auth?c={}]'.format(row['g2_server_client_id']),
         # time in secs that the client has to wait before posting a new request
         'interval': 5,
+        'expire_in': row['expire'] - time.time(),
     }
     if row['service_code']:
         res['service_code'] = row['service_code']
@@ -77,6 +79,7 @@ def auth():
         app.logger.debug('client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
+    	# (fixme) Intl
         return 'You should have given an url ending with c=N, please use the full url', 404
 
 
@@ -90,9 +93,10 @@ def auth_complete():
         g2_server_client_id = request.args.get('c')
         row = db.get_by_user(client_ip, g2_server_client_id)
         return 'Congratulations, You have connected {client_name} to the {service_domain} service!'.format(
-            client_name=db['client_name'], service_domain=urllib.parse.urlparse(row['redirect_url']).netloc)
+            client_name=row['client_name'], service_domain=urllib.parse.urlparse(row['redirect_url']).netloc)
     except db.MissingEntry:
         app.logger.debug('client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
+    	# (fixme) Intl
         return 'You should have given an url ending with c=N, please use the full url', 404
