@@ -19,7 +19,6 @@
 """
 
 import os
-import time
 import logging
 from six.moves import urllib
 
@@ -51,6 +50,7 @@ def code():
     redirect_url = request.form['redirect_url']
 
     row = db.get_by_client(client_ip, client_hash, client_name, redirect_url)
+
     res = {
         # url that the client present to the user
         'url': 'https://tinyurl.com/g2auth?c={}]'.format(row['g2_server_client_id']),
@@ -60,6 +60,7 @@ def code():
     }
     if row['service_code']:
         res['service_code'] = row['service_code']
+
     return res
 
 
@@ -74,7 +75,9 @@ def auth():
         row = db.get_by_user(client_ip, g2_server_client_id)
         # Display this message for a while before redirecting (need to use browser refresh?)
         # 'You are going to be redirect to {} for authentication'.format(domain(row['redirect_url']))
-        return redirect(row['redirect_url'])
+        url = row['redirect_url']
+        app.logger.debug('redirect_url=%s', url)
+        return redirect(url)
     except db.MissingEntry:
         app.logger.debug('client IP %s does not have any active authentication session', client_ip)
         abort(404)
@@ -91,9 +94,14 @@ def auth_complete():
 
     try:
         g2_server_client_id = request.args.get('c')
+        # (fixme) code=xxx is a specificity of pushbullet!
+        service_code = request.args.get('code')
+        # Ensure that a single record is matched
         row = db.get_by_user(client_ip, g2_server_client_id)
+        # Update the record with the service_code returned by the 3P service
+        db.update_by_user(client_ip, g2_server_client_id, service_code)
         return 'Congratulations, You have connected {client_name} to the {service_domain} service!'.format(
-            client_name=row['client_name'], service_domain=urllib.parse.urlparse(row['redirect_url']).netloc)
+               client_name=row['client_name'], service_domain=urllib.parse.urlparse(row['redirect_url']).netloc)
     except db.MissingEntry:
         app.logger.debug('client IP %s does not have any active authentication session', client_ip)
         abort(404)
