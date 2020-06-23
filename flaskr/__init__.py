@@ -23,17 +23,22 @@ import time
 import logging
 from six.moves import urllib
 
-from flask import Flask, request, redirect, abort
+from flask import Flask, request, redirect, url_for, abort
 
 from . import db
 
 
-app = Flask('g2server', instance_relative_config=True) #pylint: disable=C0103
+app = Flask('g2server', static_folder='g2.server/static', instance_relative_config=True) #pylint: disable=C0103
 app.config.from_mapping(
     DATABASE=os.path.join(app.instance_path, 'g2server.sqlite'),
 )
 app.teardown_appcontext(db.close_db)
 app.logger.setLevel(logging.DEBUG)
+
+
+@app.route('/icon.png')
+def icon():
+    return redirect(url_for('static', filename='icon.png'))
 
 
 @app.route('/code', methods=['POST'])
