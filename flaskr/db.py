@@ -21,8 +21,10 @@
 import time
 import sqlite3
 from itertools import count, filterfalse
+import click
 
 from flask import current_app, g
+from flask.cli import with_appcontext
 
 class DBException(Exception):
     pass
@@ -45,9 +47,35 @@ def get_db():
 
 def close_db(_e=None):
     dbc = g.pop('dbc', None)
-
     if dbc is not None:
         dbc.close()
+
+
+def setup(app):
+    app.teardown_appcontext(close_db)
+    app.cli.add_command(init_db_command)
+    app.cli.add_command(purge_db_command)
+
+
+@click.command('init-db')
+@with_appcontext
+def init_db_command():
+    dbc = get_db()
+    with current_app.open_resource('g2.server/flaskr/schema.sql') as fil:
+        with dbc as dbt:
+            dbt.executescript(fil.read().decode('utf8'))
+    click.echo('Initialized database: %s' % current_app.config['DATABASE'])
+
+
+@click.command('purge-db')
+@with_appcontext
+def purge_db_command():
+    dbc = get_db()
+    with dbc as dbt:
+        dbr = dbt.cursor()
+        dbr.execute('DELETE FROM OAuth2 WHERE expire < ?', (time.time(),))
+    if dbr.rowcount:
+        click.echo('Purged %d row(s) from database: %s' % (dbr.rowcount, current_app.config['DATABASE']))
 
 
 def insert_by_client(client_ip, client_hash, client_name, service_name):

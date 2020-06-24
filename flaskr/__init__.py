@@ -31,9 +31,10 @@ app.config.from_mapping(
     DATABASE=os.path.join(app.instance_path, 'g2server.sqlite'),
 )
 app.config.from_pyfile('config.py', silent=True)
-app.teardown_appcontext(db.close_db)
 if 'LOGLEVEL' in app.config:
     app.logger.setLevel(app.config['LOGLEVEL'])
+
+db.setup(app)
 
 
 @app.route('/icon.png')
@@ -63,7 +64,7 @@ def code():
         res['service_author'] = row['service_author']
         # (fixme) at this point the db entry could be removed!
 
-    app.logger.debug('code(): %s', res)
+    app.logger.debug('/code: %s', res)
 
     return res
 
@@ -85,7 +86,7 @@ def auth():
         # (notice) To briefly display a message before the redirection, a refresh based redirect is needed
         return redirect(url)
     except db.MissingEntry:
-        app.logger.error('client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('/auth: client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
     	# (fixme) Intl
@@ -113,7 +114,7 @@ def auth_complete():
         return 'Congratulations, You have connected {client_name} to the {service_name} service!'.format(
             client_name=row['client_name'], service_name=row['service_name'])
     except db.MissingEntry:
-        app.logger.error('client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('/auth_complete: client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
     	# (fixme) Intl
