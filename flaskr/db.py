@@ -50,22 +50,27 @@ def close_db(_e=None):
         dbc.close()
 
 
-def get_by_client(client_ip, client_hash, client_name, redirect_url):
+def insert_by_client(client_ip, client_hash, client_name, service_name):
     dbc = get_db()
     client_ip_entries = sql_select(dbc, 'SELECT * FROM OAuth2 WHERE client_ip = ?', client_ip)
     client_hash_entries = [e for e in client_ip_entries if e['client_hash'] == client_hash]
     if client_hash_entries:
         g2_server_client_id = client_hash_entries[0]['g2_server_client_id']
-        service_code = client_hash_entries[0]['service_code']
+        service_author = client_hash_entries[0]['service_author']
+        expire = client_hash_entries[0]['expire']
     else:
         g2_server_client_id = next(filterfalse(set([r['g2_server_client_id'] for r in client_ip_entries]).__contains__, count(1)))
-        service_code = ''
+        service_author = ''
+        expire = time.time() + ENTRY_TIMEOUT
     with dbc as dbt:
-        dbt.execute('REPLACE INTO OAuth2 VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (client_ip, client_hash, client_name, redirect_url, g2_server_client_id, service_code, time.time()+ENTRY_TIMEOUT))
+        dbt.execute('REPLACE INTO '
+                    'OAuth2 (client_ip, client_hash, client_name, g2_server_client_id, service_name, service_author, expire) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (client_ip, client_hash, client_name, g2_server_client_id, service_name, service_author, expire))
     return {
+        # Return the server generated info
         'g2_server_client_id': g2_server_client_id,
-        'service_code': service_code,
+        'service_author': service_author,
     }
 
 
@@ -85,25 +90,16 @@ def get_by_user(client_ip, g2_server_client_id):
     return client_entries[0]
 
 
-def update_by_user(client_ip, g2_server_client_id, service_code):
+def update_by_user(client_ip, g2_server_client_id, service_author):
     dbc = get_db()
     with dbc as dbt:
         if g2_server_client_id:
-            dbt.execute('UPDATE OAuth2 SET service_code = ? WHERE client_ip = ? and g2_server_client_id = ?',
-                        (service_code, client_ip, g2_server_client_id))
+            dbt.execute('UPDATE OAuth2 SET service_author = ? WHERE client_ip = ? and g2_server_client_id = ?',
+                        (service_author, client_ip, g2_server_client_id))
         else:
-            dbt.execute('UPDATE OAUth2 SET service_code = ? WHERE client_ip = ?',
-                        (service_code, client_ip))
+            dbt.execute('UPDATE OAUth2 SET service_author = ? WHERE client_ip = ?',
+                        (service_author, client_ip))
 
 
 def sql_select(dbc, sql, *args):
-    dbs = dbc.execute(sql, args)
-    rows = []
-    while True:
-        row = dbs.fetchone()
-        if not row:
-            break
-        if row['expire'] > time.time():
-            rows.append(row)
-
-    return rows
+    return [r for r in dbc.execute(sql, args) if r['expire'] > time.time()]

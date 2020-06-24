@@ -19,10 +19,9 @@
 """
 
 import os
-import logging
-from six.moves import urllib
+import importlib
 
-from flask import Flask, request, redirect, url_for, abort
+from flask import Flask, current_app, request, redirect, url_for, abort
 
 from . import db
 
@@ -31,8 +30,10 @@ app = Flask('g2server', static_folder='g2.server/static', instance_relative_conf
 app.config.from_mapping(
     DATABASE=os.path.join(app.instance_path, 'g2server.sqlite'),
 )
+app.config.from_pyfile('config.py', silent=True)
 app.teardown_appcontext(db.close_db)
-app.logger.setLevel(logging.DEBUG)
+if 'LOGLEVEL' in app.config:
+    app.logger.setLevel(app.config['LOGLEVEL'])
 
 
 @app.route('/icon.png')
@@ -47,19 +48,22 @@ def code():
     client_ip = request.access_route[0]
     client_name = request.form['client_name']
     client_hash = request.form['client_hash']
-    redirect_url = request.form['redirect_url']
+    service_name = request.form['service_name']
 
-    row = db.get_by_client(client_ip, client_hash, client_name, redirect_url)
+    row = db.insert_by_client(client_ip, client_hash, client_name, service_name)
 
     res = {
         # url that the client present to the user
-        'url': 'https://tinyurl.com/g2auth?c={}]'.format(row['g2_server_client_id']),
+        'url': current_app.config['G2_SERVER_AUTH_URL'].format(row['g2_server_client_id']),
         # time in secs that the client has to wait before posting a new request
         'interval': 5,
         'expire_in': db.ENTRY_TIMEOUT,
     }
-    if row['service_code']:
-        res['service_code'] = row['service_code']
+    if row['service_author']:
+        res['service_author'] = row['service_author']
+        # (fixme) at this point the db entry could be removed!
+
+    app.logger.debug('code(): %s', res)
 
     return res
 
@@ -72,14 +76,16 @@ def auth():
 
     try:
         g2_server_client_id = request.args.get('c')
+
+        # Call the service specific redirect_url API
         row = db.get_by_user(client_ip, g2_server_client_id)
-        # Display this message for a while before redirecting (need to use browser refresh?)
-        # 'You are going to be redirect to {} for authentication'.format(domain(row['redirect_url']))
-        url = row['redirect_url']
-        app.logger.debug('redirect_url=%s', url)
+        service_module = importlib.import_module('.' + row['service_name'], package='flaskr')
+        url = service_module.redirect_url()
+        app.logger.debug('%s.redirect_url(): %s', row['service_name'], url)
+        # (notice) To briefly display a message before the redirection, a refresh based redirect is needed
         return redirect(url)
     except db.MissingEntry:
-        app.logger.debug('client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
     	# (fixme) Intl
@@ -94,16 +100,20 @@ def auth_complete():
 
     try:
         g2_server_client_id = request.args.get('c')
-        # (fixme) code=xxx is a specificity of pushbullet!
-        service_code = request.args.get('code')
-        # Ensure that a single record is matched
+
+        # Call the service specific author API
         row = db.get_by_user(client_ip, g2_server_client_id)
+        service_module = importlib.import_module('.' + row['service_name'], package='flaskr')
+        service_author = service_module.author(request.args)
+
         # Update the record with the service_code returned by the 3P service
-        db.update_by_user(client_ip, g2_server_client_id, service_code)
-        return 'Congratulations, You have connected {client_name} to the {service_domain} service!'.format(
-               client_name=row['client_name'], service_domain=urllib.parse.urlparse(row['redirect_url']).netloc)
+        db.update_by_user(client_ip, g2_server_client_id, service_author)
+        app.logger.debug('%s.author(%s): %s', row['service_name'], request.args, service_author)
+
+        return 'Congratulations, You have connected {client_name} to the {service_name} service!'.format(
+               client_name=row['client_name'], service_name=row['service_name'])
     except db.MissingEntry:
-        app.logger.debug('client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('client IP %s does not have any active authentication session', client_ip)
         abort(404)
     except db.TooManyMatches:
     	# (fixme) Intl
