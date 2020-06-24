@@ -111,7 +111,7 @@ def auth_complete():
         app.logger.debug('%s.author(%s): %s', row['service_name'], request.args, service_author)
 
         return 'Congratulations, You have connected {client_name} to the {service_name} service!'.format(
-               client_name=row['client_name'], service_name=row['service_name'])
+            client_name=row['client_name'], service_name=row['service_name'])
     except db.MissingEntry:
         app.logger.error('client IP %s does not have any active authentication session', client_ip)
         abort(404)
