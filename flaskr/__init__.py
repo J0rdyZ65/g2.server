@@ -42,9 +42,9 @@ def icon():
     return redirect(url_for('static', filename='icon.png'))
 
 
-@app.route('/code', methods=['POST'])
-def code():
-    """Route for the client requesting the authentication on behalf of the user."""
+@app.route('/service_author', methods=['POST'])
+def service_author():
+    """Route for the client requesting the authorization on behalf of the user."""
 
     client_ip = request.access_route[0]
     client_name = request.form['client_name']
@@ -62,9 +62,9 @@ def code():
     }
     if row['service_author']:
         res['service_author'] = row['service_author']
-        # (fixme) at this point the db entry could be removed!
+        db.delete_by_client(client_ip, client_hash, client_name, service_name)
 
-    app.logger.debug('/code: %s', res)
+    app.logger.debug('%s: response: %s', request.path, res)
 
     return res
 
@@ -82,15 +82,15 @@ def auth():
         row = db.get_by_user(client_ip, g2_server_client_id)
         service_module = importlib.import_module('.' + row['service_name'], package='flaskr')
         url = service_module.redirect_url()
-        app.logger.debug('%s.redirect_url(): %s', row['service_name'], url)
-        # (notice) To briefly display a message before the redirection, a refresh based redirect is needed
+        app.logger.debug('%s: %s.redirect_url(): %s', request.path, row['service_name'], url)
+
         return redirect(url)
     except db.MissingEntry:
-        app.logger.error('/auth: client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('%s: client IP %s does not have any active authentication session', request.path, client_ip)
         abort(404)
     except db.TooManyMatches:
-    	# (fixme) Intl
-        return 'You should have given an url ending with c=N, please use the full url', 404
+    	# (fixme) Intl and beautify!
+        return 'You should have given an url ending with &c=<N>, please use the full url!', 404
 
 
 @app.route('/auth_complete')
@@ -109,13 +109,14 @@ def auth_complete():
 
         # Update the record with the service_code returned by the 3P service
         db.update_by_user(client_ip, g2_server_client_id, service_author)
-        app.logger.debug('%s.author(%s): %s', row['service_name'], request.args, service_author)
+        app.logger.debug('%s: %s.author(%s): %s', row['service_name'], request.path, request.args, service_author)
 
+    	# (fixme) Intl and beautify!
         return 'Congratulations, You have connected {client_name} to the {service_name} service!'.format(
             client_name=row['client_name'], service_name=row['service_name'])
     except db.MissingEntry:
-        app.logger.error('/auth_complete: client IP %s does not have any active authentication session', client_ip)
+        app.logger.error('%s: client IP %s does not have any active authentication session', request.path, client_ip)
         abort(404)
     except db.TooManyMatches:
-    	# (fixme) Intl
-        return 'You should have given an url ending with c=N, please use the full url', 404
+    	# (fixme) Intl and beautify!
+        return 'You should have given an url ending with &c=<N>, please use the full url', 404

@@ -102,6 +102,13 @@ def insert_by_client(client_ip, client_hash, client_name, service_name):
     }
 
 
+def delete_by_client(client_ip, client_hash, client_name, service_name):
+    dbc = get_db()
+    with dbc as dbt:
+        dbt.execute('DELETE FROM OAuth2 WHERE client_ip = ? AND client_hash = ? AND client_name = ? AND service_name = ?',
+                    (client_ip, client_hash, client_name, service_name))
+
+
 def get_by_user(client_ip, g2_server_client_id):
     dbc = get_db()
     if g2_server_client_id:
