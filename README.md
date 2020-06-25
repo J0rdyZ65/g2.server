@@ -13,7 +13,7 @@ G2 flask based server hosted on public clouds
 
 - Add to the .bashrc file in the home directory the following line:
  
-         export FLASK_APP=g2.server/flaskr
+        export FLASK_APP=g2.server/flaskr
 
 - Initialize the database running the following command from your home directory:
 
