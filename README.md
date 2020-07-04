@@ -14,6 +14,27 @@ G2 flask based server hosted on public clouds
 - Add to the .bashrc file in the home directory the following line:
  
         export FLASK_APP=g2.server/flaskr
+        
+- Create the instance folder in your home direcory:
+
+        cd
+        mkdir instance
+
+- Create the *config.py* file in the instance folder using your preferred editor or the PA web editor:
+
+        cd instance
+        vi config.py
+
+- The *config.py* file should contain at least the following four variables:
+
+        # G2 server auth url
+        G2_SERVER_AUTH_URL = '<url-to-be-inserted-by-the-user>'
+        # Base URL of this server
+        G2_SERVER_AUTH_COMPLETE_URL = '<your-pushbullet-redirect-url-on-success>'
+        # G2 client id as registered on the pushbullet site
+        PUSHBULLET_G2_CLIENT_ID = '<your-pushbullet-client-id-here>'
+        # G2 client secret as registered on the pushbullet site
+        PUSHBULLET_G2_CLIENT_SECRET = '<your-pushbullet-client-secret-here>'
 
 - Initialize the database running the following command from your home directory:
 
